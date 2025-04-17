@@ -236,6 +236,6 @@ class uniembed_nn(nn.Module):
 
         for modality_name, modality_values in latents.items():
             for output_name, _ in inputs.items():
-                outputs[modality_name + '_' + output_name] = self.decoders[output_name](modality_values)
+                outputs[modality_name + ',' + output_name] = self.decoders[output_name](modality_values)
 
         return latents, outputs

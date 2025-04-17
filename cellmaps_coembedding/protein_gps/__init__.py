@@ -56,7 +56,7 @@ def save_results(model, protein_dataset, data_wrapper, results_suffix=''):
     for input_modality in data_wrapper.modalities_dict.keys():
         all_latents[input_modality] = dict()
         for output_modality in data_wrapper.modalities_dict.keys():
-            output_key = input_modality + '_' + output_modality
+            output_key = input_modality + ',' + output_modality
             all_outputs[output_key] = dict()
 
     embeddings_by_protein = dict()
@@ -72,8 +72,8 @@ def save_results(model, protein_dataset, data_wrapper, results_suffix=''):
                     all_latents[modality][protein_name] = protein_embedding
                     embeddings_by_protein[protein_name][modality] = protein_embedding
             for modality, output in outputs.items():
-                input_modality = modality.split('_')[0]
-                output_modality = modality.split('_')[1]
+                input_modality = modality.split(',')[0]
+                output_modality = modality.split(',')[1]
                 if (mask[
                     input_modality] > 0):  # just need input modality to be there... #& (mask[output_modality] > 0):
                     all_outputs[modality][protein_name] = output.detach().cpu().numpy()
@@ -90,7 +90,7 @@ def save_results(model, protein_dataset, data_wrapper, results_suffix=''):
     # save reconstructed embeddings
     for modality, outputs in all_outputs.items():
         filepath = '{}_{}_reconstructed.tsv'.format(resultsdir, modality)
-        output_modality = modality.split('_')[1]
+        output_modality = modality.split(',')[1]
         output_modality_dim = data_wrapper.modalities_dict[output_modality].input_dim
         write_embedding_dictionary_to_file(filepath, outputs, output_modality_dim)
 
@@ -216,7 +216,7 @@ def fit_predict(resultsdir, modality_data,
                     if torch.sum(mask) == 0:
                         continue  # no overlap
 
-                    output_key = input_modality + '_' + output_modality
+                    output_key = input_modality + ',' + output_modality
 
                     # compare OUTPUT modality original embedding to output embedding
                     pairwise_dist_input_output = 1 - F.cosine_similarity(batch_data[output_modality],
@@ -267,7 +267,7 @@ def fit_predict(resultsdir, modality_data,
                 triplet_loss = triplet_loss[mask]
 
                 batch_triplet_losses = torch.cat((batch_triplet_losses, triplet_loss))
-                total_triplet_loss_by_modality[anchor_modality + '_' +
+                total_triplet_loss_by_modality[anchor_modality + ',' +
                                                posneg_modality].append(torch.mean(triplet_loss).detach().cpu().numpy())
 
             if (len(batch_reconstruction_losses) == 0) | (len(batch_triplet_losses) == 0):
