@@ -105,6 +105,7 @@ def fit_predict(resultsdir, modality_data,
                 triplet_margin=0.2,
                 lambda_reconstruction=5.0,
                 lambda_triplet=5.0,
+                lambda_l2=0.001,
                 l2_norm=False,
                 dropout=0,
                 save_epoch=50,
@@ -178,6 +179,8 @@ def fit_predict(resultsdir, modality_data,
 
     protein_dataset = Protein_Dataset(data_wrapper.modalities_dict)
     train_loader = DataLoader(protein_dataset, batch_size=batch_size, shuffle=True)
+    print(f'lambda L2: {lambda_l2}')
+    print(f'lambda triplet loss: {lambda_triplet}')
 
     for epoch in range(n_epochs):
 
@@ -185,9 +188,10 @@ def fit_predict(resultsdir, modality_data,
         total_loss = []
         total_reconstruction_loss = []
         total_triplet_loss = []
+        total_l2_loss = []
+        
         total_reconstruction_loss_by_modality = collections.defaultdict(list)  # key: inputmodality_outputmodality
         total_triplet_loss_by_modality = collections.defaultdict(list)  # key: modality
-
         AE_model.train()
 
         # loop over all batches
@@ -198,9 +202,12 @@ def fit_predict(resultsdir, modality_data,
 
             batch_reconstruction_losses = torch.tensor([]).to(device)
             batch_triplet_losses = torch.tensor([]).to(device)
+            batch_l2_losses = torch.tensor([])
 
             for input_modality in batch_data.keys():
-
+                l2_loss = torch.norm(latents[input_modality], p=2, dim=1)
+                batch_l2_losses = torch.cat((batch_l2_losses, l2_loss))
+                
                 # get reconstruction loss
                 for output_modality in batch_data.keys():
 
@@ -270,12 +277,14 @@ def fit_predict(resultsdir, modality_data,
             if mean_losses:
                 reconstruction_loss = torch.mean(batch_reconstruction_losses)
                 triplet_loss = torch.mean(batch_triplet_losses)
+                l2_loss = torch.mean(batch_l2_losses)
 
             else:
                 reconstruction_loss = torch.sum(batch_reconstruction_losses)
                 triplet_loss = torch.sum(batch_triplet_losses)
+                triplet_loss = torch.sum(batch_l2_losses)
 
-            batch_total = lambda_reconstruction * reconstruction_loss + lambda_triplet * triplet_loss
+            batch_total = lambda_reconstruction * reconstruction_loss + lambda_triplet * triplet_loss + lambda_l2 * l2_loss
 
             AE_optimizer.zero_grad()
             batch_total.backward()
@@ -284,17 +293,21 @@ def fit_predict(resultsdir, modality_data,
             total_loss.append(batch_total.detach().cpu().numpy())
             total_reconstruction_loss.append(reconstruction_loss.detach().cpu().numpy())
             total_triplet_loss.append(triplet_loss.detach().cpu().numpy())
+            total_l2_loss.append(l2_loss.detach().cpu().numpy())
 
         # get result string wtith losses
         result_string = 'epoch:%d\ttotal_loss:%03.5f\treconstruction_loss:%03.5f\ttriplet_loss:%03.5f\t' % (
             epoch,
             np.mean(total_loss),
             np.mean(total_reconstruction_loss),
-            np.mean(total_triplet_loss))
+            np.mean(total_triplet_loss),
+            np.mean(total_l2_loss),
+            )
         for modality, loss in total_reconstruction_loss_by_modality.items():
             result_string += '%s_reconstruction_loss:%03.5f\t' % (modality, np.mean(loss))
         for modality, loss in total_triplet_loss_by_modality.items():
             result_string += '%s_triplet_loss:%03.5f\t' % (modality, np.mean(loss))
+        
         print(result_string, file=source_file)
 
         # save results at update epochs

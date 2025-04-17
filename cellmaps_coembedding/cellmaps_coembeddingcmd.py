@@ -44,6 +44,9 @@ def _parse_arguments(desc, args):
                         help='Algorithm to use for coembedding. Defaults to MUSE. "auto" is deprecated, '
                              'and new name "proteingps" should be used.'
                         )
+    parser.add_argument('--lambda_reconstruction', help='reconstruction loss weight',default=5.0,type=float)
+    parser.add_argument('--lambda_l2', help='L2 loss weight',default=0.001,type=float)
+    parser.add_argument('--lambda_triplet', help='Triplet loss weight',default=5.0,type=float)
     parser.add_argument(PPI_EMBEDDINGDIR,
                         help='Directory aka rocrate where ppi '
                              'embedding file resides (Deprecated: use --embeddings flag)')
