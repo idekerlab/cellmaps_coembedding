@@ -282,7 +282,7 @@ def fit_predict(resultsdir, modality_data,
             else:
                 reconstruction_loss = torch.sum(batch_reconstruction_losses)
                 triplet_loss = torch.sum(batch_triplet_losses)
-                triplet_loss = torch.sum(batch_l2_losses)
+                l2_loss = torch.sum(batch_l2_losses)
 
             batch_total = lambda_reconstruction * reconstruction_loss + lambda_triplet * triplet_loss + lambda_l2 * l2_loss
 
@@ -296,7 +296,7 @@ def fit_predict(resultsdir, modality_data,
             total_l2_loss.append(l2_loss.detach().cpu().numpy())
 
         # get result string wtith losses
-        result_string = 'epoch:%d\ttotal_loss:%03.5f\treconstruction_loss:%03.5f\ttriplet_loss:%03.5f\t' % (
+        result_string = 'epoch:%d\ttotal_loss:%03.5f\treconstruction_loss:%03.5f\ttriplet_loss:%03.5f\tl2_loss:%03.5f\t' % (
             epoch,
             np.mean(total_loss),
             np.mean(total_reconstruction_loss),

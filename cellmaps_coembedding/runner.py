@@ -273,6 +273,10 @@ class ProteinGPSCoEmbeddingGenerator(EmbeddingGenerator):
         self._batch_size = batch_size
         self._jackknife_percent = jackknife_percent
         self._mean_losses = mean_losses
+        self.lambda_reconstruction = lambda_reconstruction
+        self.lambda_triplet = lambda_triplet
+        self.lambda_l2 = lambda_l2
+
 
     def get_next_embedding(self):
         """
@@ -422,7 +426,8 @@ class AutoCoEmbeddingGenerator(ProteinGPSCoEmbeddingGenerator):
                  ppi_embeddingdir=None, image_embeddingdir=None, embedding_names=None,
                  jackknife_percent=EmbeddingGenerator.JACKKNIFE_PERCENT, n_epochs=EmbeddingGenerator.N_EPOCHS,
                  save_update_epochs=True, batch_size=16, triplet_margin=0.2, dropout=EmbeddingGenerator.DROPOUT,
-                 l2_norm=False, mean_losses=False):
+                 l2_norm=False, mean_losses=False,lambda_reconstruction=5.0,
+                 lambda_triplet=5.0,lambda_l2=0.001):
         super().__init__(dimensions, outdir, embeddings, ppi_embeddingdir, image_embeddingdir, embedding_names,
                          jackknife_percent, n_epochs, save_update_epochs, batch_size, triplet_margin, dropout, l2_norm,
                          mean_losses)
