@@ -495,7 +495,11 @@ class FakeCoEmbeddingGenerator(EmbeddingGenerator):
 
 class CellmapsCoEmbedder(object):
     """
-    Class to run algorithm
+    Executes the generation of co-embeddings from multiple biological embedding sources.
+
+    This class coordinates the loading of input embeddings (e.g., image, PPI), invokes a
+    co-embedding generator (such as ProteinGPS or MUSE), and handles output generation,
+    provenance tracking, and dataset registration.
     """
 
     def __init__(self, outdir=None,
