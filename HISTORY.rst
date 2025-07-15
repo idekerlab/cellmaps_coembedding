@@ -44,6 +44,8 @@ History
   `AutoCoEmbeddingGenerator` is deprecated and calls proteingps. The package name was renamed from `autoembed_sc`
   to `proteingps`.
 
+* Removed l2 normalization
+
 * Constants updated in `ProteinGPSCoEmbeddingGenerator` (triplet_margin=0.2) and in proteingps's fit_predict
   (triplet_margin=0.2, lambda_reconstruction=5.0, lambda_triplet=5.0)
 
