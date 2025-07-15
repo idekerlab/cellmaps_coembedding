@@ -60,6 +60,8 @@ History
 
 * Refactor code.
 
+* Update defaults (EPOCHS)
+
 0.3.1 (2024-09-13)
 ------------------
 
