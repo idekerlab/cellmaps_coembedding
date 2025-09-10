@@ -61,6 +61,8 @@ def _parse_arguments(desc, args):
                              'a value of 0.1 means to withhold 10 percent of the data')
     parser.add_argument('--dropout', default=EmbeddingGenerator.DROPOUT, type=float,
                         help='Percentage to use fo dropout layers in neural network')
+    parser.add_argument('--k', default=EmbeddingGenerator.K, type=int,
+                        help='Number of neighbors for clustering.')
     parser.add_argument('--l2_norm', action='store_true',
                         help='If set, L2 normalize coembeddings (for proteingps algorithm)')
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0,
@@ -201,6 +203,7 @@ def main(args):
                                                n_epochs_init=theargs.n_epochs_init,
                                                jackknife_percent=theargs.jackknife_percent,
                                                dropout=theargs.dropout,
+                                               k=theargs.k,
                                                outdir=os.path.abspath(theargs.outdir),
                                                embeddings=theargs.embeddings,
                                                embedding_names=theargs.embedding_names)

@@ -31,6 +31,7 @@ class EmbeddingGenerator(object):
     N_EPOCHS = 100
     JACKKNIFE_PERCENT = 0.0
     DROPOUT = 0.5
+    K = 10
 
     def __init__(self, dimensions=LATENT_DIMENSIONS,
                  ppi_embeddingdir=None,
