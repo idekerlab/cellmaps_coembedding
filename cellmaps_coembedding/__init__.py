@@ -4,7 +4,7 @@
 
 __author__ = 'Cell Maps team'
 __email__ = 'tools@cm4ai.org'
-__version__ = '1.3.1'
+__version__ = '1.4.0'
 __repo_url__ = 'https://github.com/idekerlab/cellmaps_coembedding'
 __description__ = 'A tool to generate coembeddings from IF image embeddings and PPI network embeddings'
 __computation_name__ = 'Merged Embedding'
