@@ -1,6 +1,10 @@
 cellmaps\_coembedding.protein\_gps package
 ==========================================
 
+.. deprecated:: 1.5.0
+   Use :mod:`cellmaps_coembedding.proteinprojector` instead. This documentation
+   is retained for backward compatibility.
+
 Submodules
 ----------
 

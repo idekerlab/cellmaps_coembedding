@@ -15,7 +15,7 @@ Cell Maps CoEmbedding
 
 Creates Coembedding from `Cell Maps ImmunoFluorscent Image Embedder <https://cellmaps-image-embedding.readthedocs.io>`__
 and `Cell Maps PPI Embedder <https://cellmaps-ppi-embedding.readthedocs.io>`__ using an implementation of `MUSE <https://github.com/AltschulerWu-Lab/MUSE>`__
-or using ProteinGPS co-embedding (manuscript in review).
+or using the ProteinProjector co-embedding algorithm (formerly ProteinGPS).
 
 
 

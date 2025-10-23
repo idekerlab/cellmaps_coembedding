@@ -6,6 +6,7 @@ import random
 import logging
 import time
 from datetime import date
+import warnings
 import pandas as pd
 import numpy as np
 import dill
@@ -16,7 +17,7 @@ from cellmaps_utils import logutils
 from cellmaps_utils.provenance import ProvenanceUtil
 import cellmaps_coembedding
 import cellmaps_coembedding.muse_sc as muse
-import cellmaps_coembedding.protein_gps as proteingps
+import cellmaps_coembedding.proteinprojector as proteinprojector
 from cellmaps_coembedding.exceptions import CellmapsCoEmbeddingError
 
 logger = logging.getLogger(__name__)
@@ -220,9 +221,9 @@ class EmbeddingGenerator(object):
         raise NotImplementedError('Subclasses should implement')
 
 
-class ProteinGPSCoEmbeddingGenerator(EmbeddingGenerator):
+class ProteinProjectorCoEmbeddingGenerator(EmbeddingGenerator):
     """
-    Generates co-embedding using proteingps
+    Generates co-embeddings using the ProteinProjector algorithm (formerly ProteinGPS).
     """
 
     def __init__(self, dimensions=EmbeddingGenerator.LATENT_DIMENSIONS,
@@ -245,38 +246,15 @@ class ProteinGPSCoEmbeddingGenerator(EmbeddingGenerator):
                  learn_rate=1e-4,
                  hidden_size_1=512,
                  hidden_size_2=256,
-                 negative_from_batch=False
-                 ):
+                 negative_from_batch=False):
         """
-        Initializes the ProteinGPSCoEmbeddingGenerator.
-
-        :param dimensions: The dimensionality of the embedding space (default: 128).
-        :param outdir: The output directory where embeddings should be saved.
-        :param embeddings: Embedding data.
-        :param ppi_embeddingdir: Directory containing protein-protein interaction embeddings.
-        :param image_embeddingdir: Directory containing image embeddings.
-        :param embedding_names: List of names corresponding to each type of embedding provided.
-        :param jackknife_percent: Percentage of data to withhold from training as a method of resampling (default: 0).
-        :param n_epochs: Number of epochs for which the model trains (default: 250).
-        :param save_update_epochs: Boolean indicating whether to save embeddings at regular epoch intervals.
-        :param batch_size: Number of samples per batch during training (default: 16).
-        :param triplet_margin: The margin value for the triplet loss during training (default: 1.0).
-        :param dropout: The dropout rate between layers in the neural network (default: 0).
-        :param l2_norm: If true, L2 normalize coembeddings
-        :param mean_losses: Whether to average losses or not
-        :param lambda_reconstruction: Weight for reconstruction loss (default: 1.0)
-        :param lambda_l2: Weight for L2 regularization (default: 0.001)
-        :param lambda_triplet: Weight for triplet loss (default: 1.0)
-        :param learn_rate: Learning rate for optimizer (default: 1e-4)
-        :param hidden_size_1: Size of first hidden layer (default: 512)
-        :param hidden_size_2: Size of second hidden layer (default: 256)
-        :param negative_from_batch: Whether to use negative samples from same batch (default: False)
+        Initializes a ProteinProjectorCoEmbeddingGenerator.
         """
-        super().__init__(dimensions=dimensions, embeddings=embeddings,
+        super().__init__(dimensions=dimensions,
+                         embeddings=embeddings,
                          ppi_embeddingdir=ppi_embeddingdir,
                          image_embeddingdir=image_embeddingdir,
-                         embedding_names=embedding_names
-                         )
+                         embedding_names=embedding_names)
         self._outdir = outdir
         self.triplet_margin = triplet_margin
         self._dropout = dropout
@@ -293,12 +271,11 @@ class ProteinGPSCoEmbeddingGenerator(EmbeddingGenerator):
         self._hidden_size_1 = hidden_size_1
         self._hidden_size_2 = hidden_size_2
         self._negative_from_batch = negative_from_batch
+        self._results_subdir = 'proteinprojector'
 
     def get_next_embedding(self):
         """
-        Iteratively generates embeddings by fitting the proteingps to the current data set.
-
-        :return: Yields the next embedding, produced by the proteingps embedder's fit_predict method.
+        Iteratively generates embeddings by fitting ProteinProjector to the current data set.
         """
         embeddings, embedding_names = self._get_embeddings_and_names()
 
@@ -314,26 +291,85 @@ class ProteinGPSCoEmbeddingGenerator(EmbeddingGenerator):
                     str(len(unique_name_set)) +
                     ' total proteins')
 
-        resultsdir = os.path.join(self._outdir, 'proteingps')
+        resultsdir = os.path.join(self._outdir, self._results_subdir)
 
-        for embedding in proteingps.fit_predict(resultsdir=resultsdir,
-                                                modality_data=embeddings,
-                                                modality_names=embedding_names,
-                                                latent_dim=self.get_dimensions(),
-                                                n_epochs=self._n_epochs,
-                                                batch_size=self._batch_size,
-                                                save_update_epochs=self._save_update_epochs,
-                                                dropout=self._dropout,
-                                                l2_norm=self._l2_norm,
-                                                mean_losses=self._mean_losses,
-                                                lambda_reconstruction=self._lambda_reconstruction,
-                                                lambda_l2=self._lambda_l2,
-                                                lambda_triplet=self._lambda_triplet,
-                                                learn_rate=self._learn_rate,
-                                                hidden_size_1=self._hidden_size_1,
-                                                hidden_size_2=self._hidden_size_2,
-                                                negative_from_batch=self._negative_from_batch):
+        for embedding in proteinprojector.fit_predict(resultsdir=resultsdir,
+                                                      modality_data=embeddings,
+                                                      modality_names=embedding_names,
+                                                      latent_dim=self.get_dimensions(),
+                                                      n_epochs=self._n_epochs,
+                                                      batch_size=self._batch_size,
+                                                      save_update_epochs=self._save_update_epochs,
+                                                      dropout=self._dropout,
+                                                      l2_norm=self._l2_norm,
+                                                      mean_losses=self._mean_losses,
+                                                      lambda_reconstruction=self._lambda_reconstruction,
+                                                      lambda_l2=self._lambda_l2,
+                                                      lambda_triplet=self._lambda_triplet,
+                                                      learn_rate=self._learn_rate,
+                                                      hidden_size_1=self._hidden_size_1,
+                                                      hidden_size_2=self._hidden_size_2,
+                                                      negative_from_batch=self._negative_from_batch):
             yield embedding
+
+
+class ProteinGPSCoEmbeddingGenerator(ProteinProjectorCoEmbeddingGenerator):
+    """
+    Deprecated generator that proxies to ProteinProjectorCoEmbeddingGenerator.
+
+    .. deprecated:: 1.5.0
+       Use :class:`ProteinProjectorCoEmbeddingGenerator` instead.
+    """
+
+    def __init__(self, dimensions=EmbeddingGenerator.LATENT_DIMENSIONS,
+                 outdir=None,
+                 embeddings=None,
+                 ppi_embeddingdir=None,
+                 image_embeddingdir=None,
+                 embedding_names=None,
+                 jackknife_percent=EmbeddingGenerator.JACKKNIFE_PERCENT,
+                 n_epochs=EmbeddingGenerator.N_EPOCHS,
+                 save_update_epochs=True,
+                 batch_size=16,
+                 triplet_margin=1.0,
+                 dropout=EmbeddingGenerator.DROPOUT,
+                 l2_norm=False,
+                 mean_losses=False,
+                 lambda_reconstruction=1.0,
+                 lambda_l2=0.001,
+                 lambda_triplet=1.0,
+                 learn_rate=1e-4,
+                 hidden_size_1=512,
+                 hidden_size_2=256,
+                 negative_from_batch=False):
+        warnings.warn(
+            'ProteinGPSCoEmbeddingGenerator is deprecated; use '
+            'ProteinProjectorCoEmbeddingGenerator instead.',
+            DeprecationWarning,
+            stacklevel=2
+        )
+        super().__init__(dimensions=dimensions,
+                         outdir=outdir,
+                         embeddings=embeddings,
+                         ppi_embeddingdir=ppi_embeddingdir,
+                         image_embeddingdir=image_embeddingdir,
+                         embedding_names=embedding_names,
+                         jackknife_percent=jackknife_percent,
+                         n_epochs=n_epochs,
+                         save_update_epochs=save_update_epochs,
+                         batch_size=batch_size,
+                         triplet_margin=triplet_margin,
+                         dropout=dropout,
+                         l2_norm=l2_norm,
+                         mean_losses=mean_losses,
+                         lambda_reconstruction=lambda_reconstruction,
+                         lambda_l2=lambda_l2,
+                         lambda_triplet=lambda_triplet,
+                         learn_rate=learn_rate,
+                         hidden_size_1=hidden_size_1,
+                         hidden_size_2=hidden_size_2,
+                         negative_from_batch=negative_from_batch)
+        self._results_subdir = 'proteingps'
 
 
 class MuseCoEmbeddingGenerator(EmbeddingGenerator):
@@ -436,10 +472,11 @@ class MuseCoEmbeddingGenerator(EmbeddingGenerator):
 
 class AutoCoEmbeddingGenerator(ProteinGPSCoEmbeddingGenerator):
     """
-    Generates co-embedding using proteingps
+    Generates co-embedding using the legacy ProteinGPS configuration.
 
     .. deprecated:: 1.0.0
-       The embedding was renamed to proteingps. This class is now called ProteinGPSCoEmbeddingGenerator.
+       The embedding was renamed to ProteinGPS, and the implementation now
+       lives in :class:`ProteinProjectorCoEmbeddingGenerator`.
     """
 
     def __init__(self, dimensions=EmbeddingGenerator.LATENT_DIMENSIONS, outdir=None, embeddings=None,

@@ -8,10 +8,7 @@ Subpackages
    :maxdepth: 4
 
    cellmaps_coembedding.muse_sc
-
-.. toctree::
-   :maxdepth: 4
-
+   cellmaps_coembedding.proteinprojector
    cellmaps_coembedding.protein_gps
 
 Submodules

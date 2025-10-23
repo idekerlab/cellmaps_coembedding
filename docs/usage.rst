@@ -2,7 +2,8 @@
 Usage
 =====
 
-This tool generates a co-embedding from input embeddings using either the `MuSE` algorithm or `ProteinGPS`.
+This tool generates a co-embedding from input embeddings using either the `MuSE` algorithm or `ProteinProjector`
+(formerly `ProteinGPS`).
 The co-embedding is constructed from two or more input embedding datasets, such as protein-protein interaction (PPI)
 embeddings (`cellmaps_ppi_embedding <https://cellmaps-ppi-embedding.readthedocs.io>`__) or image embeddings
 (`cellmaps_image_embedding <https://cellmaps-image-embedding.readthedocs.io>`__).
@@ -59,8 +60,11 @@ For information invoke :code:`cellmaps_coembeddingcmd.py -h`
     Names corresponding to each filepath input in --embeddings.
 
 - ``--algorithm``
-    Algorithm to use for coembedding. Choices: 'auto', 'muse', 'proteingps'. Defaults to 'muse'.
-    'auto' is deprecated, and 'proteingps' should be used instead.
+    Algorithm to use for coembedding. Choices: 'auto', 'muse', 'proteingps', 'proteinprojector'. Defaults to 'muse'.
+    'auto' and 'proteingps' are deprecated; use 'proteinprojector' instead.
+
+- ``--proteinprojector``
+    Convenience flag to select the ProteinProjector algorithm (equivalent to ``--algorithm proteinprojector``).
 
 - ``--latent_dimension``
     Output dimension of the embedding. Default is 128.
@@ -81,34 +85,34 @@ For information invoke :code:`cellmaps_coembeddingcmd.py -h`
     Percentage to use for dropout layers in the neural network.
 
 - ``--l2_norm``
-    If set, performs L2 normalization on coembeddings (ProteinGPS only).
+    If set, performs L2 normalization on coembeddings (ProteinProjector only, formerly ProteinGPS).
 
 - ``--lambda_triplet``
-    Weight for triplet loss (ProteinGPS only). (Default: 1.0)
+    Weight for triplet loss (ProteinProjector only, formerly ProteinGPS). (Default: 1.0)
 
 - ``--mean_losses``
-    If set, uses the mean of the loss functions instead of the sum (ProteinGPS only).
+    If set, uses the mean of the loss functions instead of the sum (ProteinProjector only, formerly ProteinGPS).
 
 - ``--batch_size``
-    Batch size for training (ProteinGPS only). (Default: 16)
+    Batch size for training (ProteinProjector only, formerly ProteinGPS). (Default: 16)
 
 - ``--triplet_margin``
-    Margin for triplet loss (ProteinGPS only). (Default: 1.0)
+    Margin for triplet loss (ProteinProjector only, formerly ProteinGPS). (Default: 1.0)
 
 - ``--learn_rate``
-    Learning rate for the optimizer (ProteinGPS only). (Default: 1e-4)
+    Learning rate for the optimizer (ProteinProjector only, formerly ProteinGPS). (Default: 1e-4)
 
 - ``--hidden_size_1``
-    Size of the first hidden layer in the neural network (ProteinGPS only). (Default: 512)
+    Size of the first hidden layer in the neural network (ProteinProjector only, formerly ProteinGPS). (Default: 512)
 
 - ``--hidden_size_2``
-    Size of the second hidden layer in the neural network (ProteinGPS only). (Default: 256)
+    Size of the second hidden layer in the neural network (ProteinProjector only, formerly ProteinGPS). (Default: 256)
 
 - ``--save_update_epochs``
-    If set, saves the model state at specified epoch intervals (ProteinGPS only).
+    If set, saves the model state at specified epoch intervals (ProteinProjector only, formerly ProteinGPS).
 
 - ``--negative_from_batch``
-    If set, uses negative samples from the same batch for triplet loss (ProteinGPS only).
+    If set, uses negative samples from the same batch for triplet loss (ProteinProjector only, formerly ProteinGPS).
 
 - ``--fake_embedding``
     If set, generates fake co-embeddings.
@@ -157,7 +161,7 @@ Another example:
     cellmaps_coembeddingcmd.py my_output_dir \
         --embeddings ppi_emd.tsv image_emd.tsv \
         --embedding_names ppi image \
-        --algorithm proteingps \
+        --proteinprojector \
         --latent_dimension 128 \
         --n_epochs 300 \
         --jackknife_percent 0.2 \

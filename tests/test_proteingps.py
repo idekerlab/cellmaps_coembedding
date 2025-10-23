@@ -1,9 +1,23 @@
+import csv
 import os
 import shutil
 import tempfile
 import unittest
+import numpy as np
+import torch
 
-from cellmaps_coembedding.protein_gps import *
+import cellmaps_coembedding.protein_gps as legacy_proteingps
+import cellmaps_coembedding.proteinprojector as proteinprojector
+from cellmaps_coembedding.proteinprojector import (
+    Modality,
+    Protein_Dataset,
+    ToTensor,
+    TrainingDataWrapper,
+    fit_predict,
+    save_results,
+    uniembed_nn,
+    write_embedding_dictionary_to_file,
+)
 
 
 class TestToTensor(unittest.TestCase):
@@ -73,7 +87,7 @@ class Testuniembednn(unittest.TestCase):
         self.assertIn('test_modality___test_modality', outputs)
 
 
-class TestProteinGPS(unittest.TestCase):
+class TestProteinProjector(unittest.TestCase):
 
     def test_write_embedding_dictionary_to_file(self):
         temp_dir = tempfile.mkdtemp()
@@ -109,7 +123,7 @@ class TestProteinGPS(unittest.TestCase):
             ]
             modality_names = ['testmod1', 'testmod2']
             device = torch.device("cpu")
-            result_dir = os.path.join(temp_dir, 'proteingps')
+            result_dir = os.path.join(temp_dir, 'proteinprojector')
             data_wrapper = TrainingDataWrapper(modality_data, modality_names, device, False, 0.5, 2, 10, 5, result_dir)
             protein_dataset = Protein_Dataset(data_wrapper.modalities_dict)
             model = uniembed_nn(data_wrapper)
@@ -165,6 +179,11 @@ class TestFitPredict(unittest.TestCase):
         results = list(results_generator)
         self.assertTrue(len(results) > 0)
         self.assertIsInstance(results[0], list)
+
+
+class TestDeprecatedAlias(unittest.TestCase):
+    def test_fit_predict_alias(self):
+        self.assertIs(legacy_proteingps.fit_predict, proteinprojector.fit_predict)
 
 
 if __name__ == '__main__':

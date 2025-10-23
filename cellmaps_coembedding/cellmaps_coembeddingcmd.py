@@ -11,10 +11,14 @@ from cellmaps_coembedding.exceptions import CellmapsCoEmbeddingError
 from cellmaps_utils import logutils
 from cellmaps_utils import constants
 import cellmaps_coembedding
-from cellmaps_coembedding.runner import EmbeddingGenerator, ProteinGPSCoEmbeddingGenerator
-from cellmaps_coembedding.runner import MuseCoEmbeddingGenerator
-from cellmaps_coembedding.runner import FakeCoEmbeddingGenerator
-from cellmaps_coembedding.runner import CellmapsCoEmbedder
+from cellmaps_coembedding.runner import (
+    CellmapsCoEmbedder,
+    EmbeddingGenerator,
+    FakeCoEmbeddingGenerator,
+    MuseCoEmbeddingGenerator,
+    ProteinGPSCoEmbeddingGenerator,
+    ProteinProjectorCoEmbeddingGenerator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +44,9 @@ def _parse_arguments(desc, args):
                         help='Filepath to .tsv with embeddings. Requires two or more paths.')
     parser.add_argument('--embedding_names', nargs='+',
                         help='Name corresponding to each filepath input in --embeddings. ')
-    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps'], default='muse',
-                        help='Algorithm to use for coembedding. Defaults to MUSE. "auto" is deprecated, '
-                             'and new name "proteingps" should be used.'
+    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps', 'proteinprojector'], default='muse',
+                        help='Algorithm to use for coembedding. Defaults to MUSE. "auto" and "proteingps" are '
+                             'deprecated; use "proteinprojector" instead.'
                         )
     parser.add_argument(PPI_EMBEDDINGDIR,
                         help='Directory aka rocrate where ppi '
@@ -64,29 +68,40 @@ def _parse_arguments(desc, args):
     parser.add_argument('--k', default=EmbeddingGenerator.K, type=int,
                         help='Number of neighbors for clustering.')
     parser.add_argument('--l2_norm', action='store_true',
-                        help='If set, L2 normalize coembeddings (for proteingps algorithm)')
+                        help='If set, L2 normalize coembeddings (for proteinprojector algorithm, formerly proteingps)')
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0,
-                        help='Weight for reconstruction loss (for proteingps algorithm) (default: 1.0)')
+                        help='Weight for reconstruction loss (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 1.0)')
     parser.add_argument('--lambda_l2', type=float, default=0.001,
-                        help='Weight for L2 regularization (for proteingps algorithm) (default: 0.001)')
+                        help='Weight for L2 regularization (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 0.001)')
     parser.add_argument('--lambda_triplet', type=float, default=1.0,
-                        help='Weight for triplet loss (for proteingps algorithm) (default: 1.0)')
+                        help='Weight for triplet loss (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 1.0)')
     parser.add_argument('--mean_losses', action='store_true',
-                        help='If set, use mean of losses otherwise sum (for proteingps algorithm)')
+                        help='If set, use mean of losses otherwise sum (for proteinprojector algorithm, '
+                             'formerly proteingps)')
     parser.add_argument('--batch_size', type=int, default=16,
-                        help='Batch size for training (for proteingps algorithm) (default: 16)')
+                        help='Batch size for training (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 16)')
     parser.add_argument('--triplet_margin', type=float, default=1.0,
-                        help='Margin for triplet loss (for proteingps algorithm) (default: 1.0)')
+                        help='Margin for triplet loss (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 1.0)')
     parser.add_argument('--learn_rate', type=float, default=1e-4,
-                        help='Learning rate for optimizer (for proteingps algorithm) (default: 1e-4)')
+                        help='Learning rate for optimizer (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 1e-4)')
     parser.add_argument('--hidden_size_1', type=int, default=512,
-                        help='Size of first hidden layer (for proteingps algorithm) (default: 512)')
+                        help='Size of first hidden layer (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 512)')
     parser.add_argument('--hidden_size_2', type=int, default=256,
-                        help='Size of second hidden layer (for proteingps algorithm) (default: 256)')
+                        help='Size of second hidden layer (for proteinprojector algorithm, formerly proteingps) '
+                             '(default: 256)')
     parser.add_argument('--save_update_epochs', action='store_true',
-                        help='If set, save model state at specified epoch intervals (for proteingps algorithm)')
+                        help='If set, save model state at specified epoch intervals (for proteinprojector algorithm, '
+                             'formerly proteingps)')
     parser.add_argument('--negative_from_batch', action='store_true',
-                        help='If set, use negative samples from same batch for triplet loss (for proteingps algorithm)')
+                        help='If set, use negative samples from same batch for triplet loss '
+                             '(for proteinprojector algorithm, formerly proteingps)')
     parser.add_argument('--fake_embedding', action='store_true',
                         help='If set, generate fake coembeddings')
     parser.add_argument('--provenance',
@@ -164,9 +179,14 @@ def main(args):
     theargs.version = cellmaps_coembedding.__version__
 
     if theargs.algorithm == 'auto':
-        logging.warning('"auto" is deprecated and will default to "proteingps". Please use "muse" or "proteingps" '
-                        'instead.')
-        theargs.algorithm = 'proteingps'  # Redirect to 'proteingps'
+        logging.warning('"auto" is deprecated and will default to "proteinprojector". '
+                        'Please use "--algorithm proteinprojector" instead.')
+        theargs.algorithm = 'proteinprojector'
+
+    if theargs.algorithm == 'proteingps':
+        logging.warning('"proteingps" algorithm is deprecated and will be removed in a future release. '
+                        'Use "--algorithm proteinprojector" instead.')
+        theargs.algorithm = 'proteinprojector'
 
     if (theargs.ppi_embeddingdir or theargs.image_embeddingdir) and theargs.embeddings:
         raise CellmapsCoEmbeddingError('Use either --ppi_embeddingdir and --image_embeddingdir or --embeddings, '
@@ -207,7 +227,29 @@ def main(args):
                                                outdir=os.path.abspath(theargs.outdir),
                                                embeddings=theargs.embeddings,
                                                embedding_names=theargs.embedding_names)
-            if theargs.algorithm == 'auto' or theargs.algorithm == 'proteingps':
+            elif theargs.algorithm == 'proteinprojector':
+                gen = ProteinProjectorCoEmbeddingGenerator(dimensions=theargs.latent_dimension,
+                                                           ppi_embeddingdir=theargs.ppi_embeddingdir,
+                                                           image_embeddingdir=theargs.image_embeddingdir,
+                                                           n_epochs=theargs.n_epochs,
+                                                           dropout=theargs.dropout,
+                                                           l2_norm=theargs.l2_norm,
+                                                           jackknife_percent=theargs.jackknife_percent,
+                                                           outdir=os.path.abspath(theargs.outdir),
+                                                           embeddings=theargs.embeddings,
+                                                           embedding_names=theargs.embedding_names,
+                                                           mean_losses=theargs.mean_losses,
+                                                           lambda_reconstruction=theargs.lambda_reconstruction,
+                                                           lambda_l2=theargs.lambda_l2,
+                                                           lambda_triplet=theargs.lambda_triplet,
+                                                           batch_size=theargs.batch_size,
+                                                           triplet_margin=theargs.triplet_margin,
+                                                           learn_rate=theargs.learn_rate,
+                                                           hidden_size_1=theargs.hidden_size_1,
+                                                           hidden_size_2=theargs.hidden_size_2,
+                                                           save_update_epochs=theargs.save_update_epochs,
+                                                           negative_from_batch=theargs.negative_from_batch)
+            elif theargs.algorithm == 'proteingps':
                 gen = ProteinGPSCoEmbeddingGenerator(dimensions=theargs.latent_dimension,
                                                      ppi_embeddingdir=theargs.ppi_embeddingdir,
                                                      image_embeddingdir=theargs.image_embeddingdir,
