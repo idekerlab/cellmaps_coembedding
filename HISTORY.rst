@@ -2,6 +2,12 @@
 History
 =======
 
+1.5.0 (2025-10-23)
+--------------------
+
+* Deprecated `cellmaps_coembedding.protein_gps` module in favor of `cellmaps_coembedding.proteinprojector`.
+  Updated documentation accordingly.
+
 1.4.0 (2025-09-10)
 --------------------
 
