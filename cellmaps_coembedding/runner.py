@@ -18,6 +18,7 @@ from cellmaps_utils.provenance import ProvenanceUtil
 import cellmaps_coembedding
 import cellmaps_coembedding.muse_sc as muse
 import cellmaps_coembedding.proteinprojector as proteinprojector
+import cellmaps_coembedding.promerge as promerge
 from cellmaps_coembedding.exceptions import CellmapsCoEmbeddingError
 
 logger = logging.getLogger(__name__)
@@ -529,6 +530,144 @@ class FakeCoEmbeddingGenerator(EmbeddingGenerator):
             row = [embed_name]
             row.extend([random.random() for x in range(0, self.get_dimensions())])
             yield row
+
+
+class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
+    def __init__(
+        self,
+        dimensions==EmbeddingGenerator.LATENT_DIMENSIONS,
+        outdir=None,
+        embeddings=None,
+        ppi_embeddingdir=None,
+        image_embeddingdir=None,
+        embedding_names=None,
+        
+        n_epochs=300,
+        save_update_epochs=True,
+        batch_size=16,
+        triplet_margin=0.5,
+        dropout=0,
+        l2_norm=True,
+        mean_losses=False,
+        learn_rate=1e-4,
+        hidden_size_1=512,
+        hidden_size_2=256,
+        negative_from_batch=False,
+        
+        cond_str_list=["base", "query"],
+        mod_str_list=['mod1', 'mod2'],
+        mod_str_list_mine=None,
+        lambda_reconstruction=1.0,
+        lambda_disentangle=1.0,
+        lambda_triplet_disentangle=1.0,
+        lambda_l2_disentangle=0,
+        lambda_l2_latent=0,
+        lambda_var=0.1,
+        disentangle_method="MINE"
+    ):
+        """
+        Generates co-embeddings of a query context based on a base context with ProMERGE method.
+        
+        :param cond_str_list: list of str. Strings in the embedding_names for contexts.
+        :param mod_str_list: list of str. Strings in the embedding_names for modalities.
+        :param mod_str_list_mine: list of str. Subset of mod_str_list to apply MINE disentanglement to. If None, apply to all modalities.
+        :param lambda_reconstruction: Weight for reconstruction loss.
+        :param lambda_disentangle: Weight for disentanglement loss.
+        :param lambda_triplet_disentangle: Weight for triplet loss.
+        :param lambda_l2_disentangle: Weight for L2 regularization on disentanglement.
+        :param lambda_l2_latent: Weight for L2 regularization on latent space.
+        :param lambda_var: Weight for variance regularization on latent space.
+        :param disentangle_method: Method for disentanglement. Options: "MINE", "subtract".
+        """
+        super().__init__(dimensions=dimensions, embeddings=embeddings,
+                         ppi_embeddingdir=ppi_embeddingdir,
+                         image_embeddingdir=image_embeddingdir,
+                         embedding_names=embedding_names
+                         )
+        self._outdir = outdir
+        self._n_epochs = n_epochs
+        self._save_update_epochs = save_update_epochs
+        self._batch_size = batch_size
+        self._triplet_margin = triplet_margin
+        self._dropout = dropout
+        self._l2_norm = l2_norm
+        self._mean_losses = mean_losses
+        self._learn_rate = learn_rate
+        self._hidden_size_1 = hidden_size_1
+        self._hidden_size_2 = hidden_size_2
+        self._negative_from_batch = negative_from_batch
+        
+        self._cond_str_list = cond_str_list
+        self._mod_str_list = mod_str_list
+        self._mod_str_list_mine = mod_str_list_mine
+        self._lambda_reconstruction = lambda_reconstruction
+        self._lambda_disentangle = lambda_disentangle
+        self._lambda_triplet_disentangle = lambda_triplet_disentangle
+        self._lambda_l2_disentangle = lambda_l2_disentangle
+        self._lambda_l2_latent = lambda_l2_latent
+        self._lambda_var = lambda_var
+        self._disentangle_method = disentangle_method
+        
+    def get_next_embedding(self):
+        """
+        Iteratively generates embeddings
+
+        :return: Yields the next embedding.
+        """
+        embeddings, embedding_names = self._get_embeddings_and_names()
+        
+        for index in np.arange(len(embeddings)):
+            e = embeddings[index]
+            e.sort(key=lambda x: x[0])
+            print('There are ' + str(len(e)) + ' ' + embedding_names[index] + ' embeddings')
+        
+        cond2cond_idx = {}
+        for cond in self._cond_str_list:
+            cond2cond_idx[cond] = [ii for ii in range(len(embedding_names)) if cond in embedding_names[ii]]
+
+        embedding_gene_names = [self._get_set_of_gene_names(x) for x in embeddings]
+        unique_name_set_all_cond = []
+        for cond, cond_idx in cond2cond_idx.items():
+            unique_name_set = []
+            for ii in cond_idx:
+                unique_name_set += [item for item in embedding_gene_names[ii]]
+            unique_name_set_all_cond += unique_name_set
+            unique_name_set = np.unique(unique_name_set)
+
+            print(f'There are {len(unique_name_set)} total proteins in {cond}')
+        unique_name_set_all_cond = np.unique(unique_name_set_all_cond)
+        print(f'There are {len(unique_name_set_all_cond)} total proteins in all contexts')
+               
+        # to add parameters
+        for embedding in promerge.fit_predict(
+            resultsdir=self._outdir,
+            modality_data=embeddings,
+            modality_names=embedding_names,
+            latent_dim=self.get_dimensions(),
+            n_epochs=self._n_epochs,
+            save_update_epochs=self._save_update_epochs,
+            batch_size=self._batch_size,
+            triplet_margin=self._triplet_margin,
+            dropout=self._dropout,
+            l2_norm=self._l2_norm,
+            mean_losses=self._mean_losses,
+            learn_rate=self._learn_rate,
+            hidden_size_1=self._hidden_size_1,
+            hidden_size_2=self._hidden_size_2,
+            negative_from_batch=self._negative_from_batch,
+            
+            cond_str_list=self._cond_str_list,
+            mod_str_list=self._mod_str_list,
+            mod_str_list_mine=self._mod_str_list_mine,
+            lambda_reconstruction=self._lambda_reconstruction,
+            lambda_disentangle=self._lambda_disentangle,
+            lambda_triplet_disentangle=self._lambda_triplet_disentangle,
+            lambda_l2_disentangle=self._lambda_l2_disentangle,
+            lambda_l2_latent=self._lambda_l2_latent,
+            lambda_var=self._lambda_var,
+            disentangle_method=self._disentangle_method
+        ):
+            yield embedding
 
 
 class CellmapsCoEmbedder(object):

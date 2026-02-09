@@ -18,6 +18,7 @@ from cellmaps_coembedding.runner import (
     MuseCoEmbeddingGenerator,
     ProteinGPSCoEmbeddingGenerator,
     ProteinProjectorCoEmbeddingGenerator,
+    ProMERGECoEmbeddingGenerator
 )
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,15 @@ def _parse_arguments(desc, args):
     parser.add_argument('--negative_from_batch', action='store_true',
                         help='If set, use negative samples from same batch for triplet loss '
                              '(for proteinprojector algorithm, formerly proteingps)')
+    parser.add_argument('--lambda_disentangle', type=float, default=1.0,
+                        help='Weight for disentanglement loss '
+                        '(for ProMERGE algorithm) (default: 1.0)')
+    parser.add_argument('--lambda_l2_disentangle', type=float, default=0.0,
+                        help='Weight for L2 regularization on disentanglement layers '
+                        '(for ProMERGE algorithm) (default: 0.0)')
+    parser.add_argument('--lambda_var', type=float, default=0.1,
+                        help='Weight for variance loss regularization '
+                        '(for ProMERGE algorithm) (default: 0.1)')
     parser.add_argument('--fake_embedding', action='store_true',
                         help='If set, generate fake coembeddings')
     parser.add_argument('--provenance',
@@ -271,6 +281,31 @@ def main(args):
                                                      hidden_size_2=theargs.hidden_size_2,
                                                      save_update_epochs=theargs.save_update_epochs,
                                                      negative_from_batch=theargs.negative_from_batch)
+            elif theargs.algorithm == 'promerge':
+                gen = ProMERGECoEmbeddingGenerator(dimensions=theargs.latent_dimension,
+                                                   ppi_embeddingdir=theargs.ppi_embeddingdir,
+                                                   image_embeddingdir=theargs.image_embeddingdir,
+                                                   n_epochs=theargs.n_epochs,
+                                                   dropout=theargs.dropout,
+                                                   l2_norm=theargs.l2_norm,
+                                                   outdir=os.path.abspath(theargs.outdir),
+                                                   embeddings=theargs.embeddings,
+                                                   embedding_names=theargs.embedding_names,
+                                                   batch_size=theargs.batch_size,
+                                                   triplet_margin=theargs.triplet_margin,
+                                                   mean_losses=theargs.mean_losses,
+                                                   learn_rate=theargs.learn_rate,
+                                                   hidden_size_1=theargs.hidden_size_1,
+                                                   hidden_size_2=theargs.hidden_size_2,
+                                                   save_update_epochs=theargs.save_update_epochs,
+                                                   negative_from_batch=theargs.negative_from_batch,
+
+                                                   lambda_reconstruction=theargs.lambda_reconstruction,
+                                                   lambda_triplet_disentangle=theargs.lambda_triplet,
+                                                   lambda_disentangle=theargs.lambda_disentangle,
+                                                   lambda_l2_disentangle=theargs.lambda_l2_disentangle,
+                                                   lambda_l2_latent=theargs.lambda_l2,
+                                                   lambda_var=theargs.lambda_var)
 
         inputdirs = gen.get_embedding_inputdirs()
         return CellmapsCoEmbedder(outdir=theargs.outdir,
