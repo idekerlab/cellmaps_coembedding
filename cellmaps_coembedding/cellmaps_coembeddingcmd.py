@@ -203,8 +203,7 @@ def main(args):
 
 
     """.format(version=cellmaps_coembedding.__version__)
-    cmd_args = args[1:]
-    theargs = _parse_arguments(desc, cmd_args)
+    theargs = _parse_arguments(desc, args[1:])
     theargs.program = args[0]
     theargs.version = cellmaps_coembedding.__version__
 

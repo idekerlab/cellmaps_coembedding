@@ -6,23 +6,56 @@ Version: {VERSION}
 
 Usage
 
-cellmaps_coembeddingcmd.py [-h] [--embeddings EMBEDDINGS [EMBEDDINGS ...]] [--embedding_names EMBEDDING_NAMES [EMBEDDING_NAMES ...]]
-                              [--algorithm {{auto,muse,proteingps,proteinprojector,promerge}}] [--ppi_embeddingdir PPI_EMBEDDINGDIR]
-                              [--image_embeddingdir IMAGE_EMBEDDINGDIR] [--latent_dimension LATENT_DIMENSION] [--n_epochs_init N_EPOCHS_INIT]
-                              [--n_epochs N_EPOCHS] [--jackknife_percent JACKKNIFE_PERCENT] [--dropout DROPOUT] [--k K] [--l2_norm]
-                              [--lambda_reconstruction LAMBDA_RECONSTRUCTION] [--lambda_l2 LAMBDA_L2] [--lambda_triplet LAMBDA_TRIPLET]
-                              [--mean_losses] [--batch_size BATCH_SIZE] [--triplet_margin TRIPLET_MARGIN] [--learn_rate LEARN_RATE]
-                              [--hidden_size_1 HIDDEN_SIZE_1] [--hidden_size_2 HIDDEN_SIZE_2] [--save_update_epochs]
-                              [--negative_from_batch] [--lambda_disentangle LAMBDA_DISENTANGLE]
-                              [--lambda_triplet_disentangle LAMBDA_TRIPLET_DISENTANGLE]
-                              [--lambda_l2_disentangle LAMBDA_L2_DISENTANGLE] [--lambda_l2_latent LAMBDA_L2_LATENT]
-                              [--lambda_var LAMBDA_VAR] [--cond_str_list COND_STR_LIST COND_STR_LIST]
-                              [--mod_str_list MOD_STR_LIST [MOD_STR_LIST ...]] [--mod_str_list_mine MOD_STR_LIST_MINE [MOD_STR_LIST_MINE ...]]
-                              [--disentangle_method {{MINE,subtract}}] [--fake_embedding] [--provenance PROVENANCE] [--name NAME]
-                              [--organization_name ORGANIZATION_NAME] [--project_name PROJECT_NAME] [--logconf LOGCONF] [--skip_logging]
-                              [--verbose] [--version]
-                              outdir
+cellmaps_coembeddingcmd.py [-h]
+   [--embeddings EMBEDDINGS [EMBEDDINGS ...]]
+   [--embedding_names EMBEDDING_NAMES [EMBEDDING_NAMES ...]]
+   [--algorithm [auto, muse, proteingps,proteinprojector,promerge]]
+   [--ppi_embeddingdir PPI_EMBEDDINGDIR]
+   [--image_embeddingdir IMAGE_EMBEDDINGDIR]
+   [--latent_dimension LATENT_DIMENSION]
+   [--fake_embedding]
+   [--provenance PROVENANCE]
+   [--name NAME]
+   [--organization_name ORGANIZATION_NAME]
+   [--project_name PROJECT_NAME]
+   [--logconf LOGCONF]
+   [--skip_logging]
+   [--verbose]
+   [--version]
 
+   [--n_epochs_init N_EPOCHS_INIT]
+   [--k K]
+
+   [--n_epochs N_EPOCHS]
+   [--dropout DROPOUT]
+   [--l2_norm]
+   [--jackknife_percent JACKKNIFE_PERCENT]
+   [--mean_losses]
+   
+   [--lambda_reconstruction LAMBDA_RECONSTRUCTION]
+   [--lambda_l2 LAMBDA_L2]
+   [--lambda_triplet LAMBDA_TRIPLET]
+   [--batch_size BATCH_SIZE]
+   [--triplet_margin TRIPLET_MARGIN]
+   [--learn_rate LEARN_RATE]
+   [--hidden_size_1 HIDDEN_SIZE_1]
+   [--hidden_size_2 HIDDEN_SIZE_2]
+   [--save_update_epochs]
+   [--negative_from_batch]
+
+   [--lambda_disentangle LAMBDA_DISENTANGLE]
+   [--lambda_triplet_disentangle LAMBDA_TRIPLET_DISENTANGLE]
+   [--lambda_l2_disentangle LAMBDA_L2_DISENTANGLE]
+   [--lambda_l2_latent LAMBDA_L2_LATENT]
+   [--lambda_var LAMBDA_VAR]
+   [--cond_str_list COND_STR_1 COND_STR_2]            
+   [--mod_str_list MOD_STR_1  MOD_STR_2 [MOD_STR_3 ...]]
+   [--mod_str_list_mine MOD_STR_MINE_1 MOD_STR_MINE_2 [MOD_STR_MINE_3 ...]]
+   [--disentangle_method {{MINE,subtract}}]
+   outdir
+
+
+   
 Outputs
 
 The tool creates several files and folders in the specified output directory.
