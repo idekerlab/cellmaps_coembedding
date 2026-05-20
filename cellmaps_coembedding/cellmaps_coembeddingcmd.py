@@ -45,9 +45,11 @@ def _parse_arguments(desc, args):
                         help='Filepath to .tsv with embeddings. Requires two or more paths.')
     parser.add_argument('--embedding_names', nargs='+',
                         help='Name corresponding to each filepath input in --embeddings. ')
-    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps', 'proteinprojector'], default='muse',
+    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps', 'proteinprojector', 'promerge'],
+                        default='muse',
                         help='Algorithm to use for coembedding. Defaults to MUSE. "auto" and "proteingps" are '
-                             'deprecated; use "proteinprojector" instead.'
+                             'deprecated; use "proteinprojector" instead. ProMERGE requires embedding names that '
+                             'identify both context and modality.'
                         )
     parser.add_argument(PPI_EMBEDDINGDIR,
                         help='Directory aka rocrate where ppi '
@@ -65,13 +67,13 @@ def _parse_arguments(desc, args):
                         help='Percentage of data to withhold from training'
                              'a value of 0.1 means to withhold 10 percent of the data')
     parser.add_argument('--dropout', default=EmbeddingGenerator.DROPOUT, type=float,
-                        help='Percentage to use fo dropout layers in neural network')
+                        help='Percentage to use for dropout layers in neural network')
     parser.add_argument('--k', default=EmbeddingGenerator.K, type=int,
                         help='Number of neighbors for clustering.')
     parser.add_argument('--l2_norm', action='store_true',
-                        help='If set, L2 normalize coembeddings (for proteinprojector algorithm, formerly proteingps)')
+                        help='If set, L2 normalize coembeddings (for proteinprojector and promerge algorithms)')
     parser.add_argument('--lambda_reconstruction', type=float, default=1.0,
-                        help='Weight for reconstruction loss (for proteinprojector algorithm, formerly proteingps) '
+                        help='Weight for reconstruction loss (for proteinprojector and promerge algorithms) '
                              '(default: 1.0)')
     parser.add_argument('--lambda_l2', type=float, default=0.001,
                         help='Weight for L2 regularization (for proteinprojector algorithm, formerly proteingps) '
@@ -106,12 +108,29 @@ def _parse_arguments(desc, args):
     parser.add_argument('--lambda_disentangle', type=float, default=1.0,
                         help='Weight for disentanglement loss '
                         '(for ProMERGE algorithm) (default: 1.0)')
+    parser.add_argument('--lambda_triplet_disentangle', type=float, default=1.0,
+                        help='Weight for triplet disentanglement loss '
+                        '(for ProMERGE algorithm) (default: 1.0)')
     parser.add_argument('--lambda_l2_disentangle', type=float, default=0.0,
                         help='Weight for L2 regularization on disentanglement layers '
+                        '(for ProMERGE algorithm) (default: 0.0)')
+    parser.add_argument('--lambda_l2_latent', type=float, default=0.0,
+                        help='Weight for L2 regularization on latent embeddings '
                         '(for ProMERGE algorithm) (default: 0.0)')
     parser.add_argument('--lambda_var', type=float, default=0.1,
                         help='Weight for variance loss regularization '
                         '(for ProMERGE algorithm) (default: 0.1)')
+    parser.add_argument('--cond_str_list', nargs=2, default=['base', 'query'],
+                        help='Context strings used by ProMERGE to identify base and query embeddings '
+                             '(default: base query)')
+    parser.add_argument('--mod_str_list', nargs='+', default=['mod1', 'mod2'],
+                        help='Modality strings used by ProMERGE to identify input modalities '
+                             '(default: mod1 mod2)')
+    parser.add_argument('--mod_str_list_mine', nargs='+',
+                        help='Subset of ProMERGE modalities to use for MINE disentanglement. '
+                             'Defaults to the available query modalities when omitted.')
+    parser.add_argument('--disentangle_method', choices=['MINE', 'subtract'], default='MINE',
+                        help='Disentanglement method for ProMERGE (default: MINE)')
     parser.add_argument('--fake_embedding', action='store_true',
                         help='If set, generate fake coembeddings')
     parser.add_argument('--provenance',
@@ -168,7 +187,7 @@ def main(args):
     desc = """
     Version {version}
 
-    Given input embeddings, this tool generates a co-embedding using either a UniEmbed algorith or
+    Given input embeddings, this tool generates a co-embedding using ProteinProjector, ProMERGE, or
     a variant of MuSE algorithm within this code base from
     Feng Bao @ Altschuler & Wu Lab @ UCSF 2022
     that is under MIT License.
@@ -184,7 +203,8 @@ def main(args):
 
 
     """.format(version=cellmaps_coembedding.__version__)
-    theargs = _parse_arguments(desc, args[1:])
+    cmd_args = args[1:]
+    theargs = _parse_arguments(desc, cmd_args)
     theargs.program = args[0]
     theargs.version = cellmaps_coembedding.__version__
 
@@ -301,11 +321,15 @@ def main(args):
                                                    negative_from_batch=theargs.negative_from_batch,
 
                                                    lambda_reconstruction=theargs.lambda_reconstruction,
-                                                   lambda_triplet_disentangle=theargs.lambda_triplet,
+                                                   lambda_triplet_disentangle=theargs.lambda_triplet_disentangle,
                                                    lambda_disentangle=theargs.lambda_disentangle,
                                                    lambda_l2_disentangle=theargs.lambda_l2_disentangle,
-                                                   lambda_l2_latent=theargs.lambda_l2,
-                                                   lambda_var=theargs.lambda_var)
+                                                   lambda_l2_latent=theargs.lambda_l2_latent,
+                                                   lambda_var=theargs.lambda_var,
+                                                   cond_str_list=theargs.cond_str_list,
+                                                   mod_str_list=theargs.mod_str_list,
+                                                   mod_str_list_mine=theargs.mod_str_list_mine,
+                                                   disentangle_method=theargs.disentangle_method)
 
         inputdirs = gen.get_embedding_inputdirs()
         return CellmapsCoEmbedder(outdir=theargs.outdir,

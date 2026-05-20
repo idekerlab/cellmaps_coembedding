@@ -18,7 +18,8 @@ The Cell Maps CoEmbedding is part of the Cell Mapping Toolkit
         :alt: Zenodo DOI badge
 
 Creates Coembedding from `Cell Maps ImmunoFluorscent Image Embedder <https://cellmaps-image-embedding.readthedocs.io>`__
-and `Cell Maps PPI Embedder <https://cellmaps-ppi-embedding.readthedocs.io>`__ using an implementation of `MUSE <https://github.com/AltschulerWu-Lab/MUSE>`__
+and `Cell Maps PPI Embedder <https://cellmaps-ppi-embedding.readthedocs.io>`__ using implementations of
+`MUSE <https://github.com/AltschulerWu-Lab/MUSE>`__, ProteinProjector, and ProMERGE.
 
 * Free software: MIT license
 * Documentation: https://cellmaps-coembedding.readthedocs.io.
@@ -122,6 +123,28 @@ For information invoke :code:`cellmaps_coembeddingcmd.py -h`
 .. code-block::
 
    cellmaps_coembeddingcmd.py ./cellmaps_coembedding_outdir --embeddings ./cellmaps_image_embedding_outdir ./cellmaps_ppi_embedding_outdir
+
+The default algorithm is ``muse``. To use ProteinProjector, pass ``--algorithm proteinprojector``:
+
+.. code-block::
+
+   cellmaps_coembeddingcmd.py ./cellmaps_coembedding_outdir --algorithm proteinprojector --embeddings ./cellmaps_image_embedding_outdir ./cellmaps_ppi_embedding_outdir
+
+To use ProMERGE, pass ``--algorithm promerge`` and provide names that include both a context string and a modality string.
+The default contexts are ``base`` and ``query``; the default modalities are ``mod1`` and ``mod2``.
+
+.. code-block::
+
+   cellmaps_coembeddingcmd.py ./cellmaps_coembedding_outdir --algorithm promerge \
+      --embeddings ./mod1_base.tsv ./mod2_base.tsv ./mod1_query.tsv \
+      --embedding_names mod1-base mod2-base mod1-query \
+      --cond_str_list base query \
+      --mod_str_list mod1 mod2 \
+      --mod_str_list_mine mod1 mod2
+
+Important ProMERGE parameters exposed by the main pipeline include ``--lambda_disentangle``,
+``--lambda_triplet_disentangle``, ``--lambda_l2_disentangle``, ``--lambda_l2_latent``,
+``--lambda_var``, and ``--disentangle_method``.
 
 
 

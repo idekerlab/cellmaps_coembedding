@@ -1,5 +1,9 @@
-import cellmaps_coembedding.proteinprojector as proteingps
-from cellmaps_coembedding.proteinprojector.architecture import TrainingDataWrapper, Protein_Dataset
+"""
+ProMERGE co-embedding algorithm.
+
+This module trains a base-context ProteinProjector model, uses the resulting
+anchor embeddings, and then learns query-context embeddings with ProMERGE.
+"""
 
 import os
 import collections
@@ -10,16 +14,40 @@ from tqdm import tqdm
 from collections import defaultdict
 
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+import cellmaps_coembedding.proteinprojector as proteingps
+from cellmaps_coembedding.exceptions import CellmapsCoEmbeddingError
+from cellmaps_coembedding.proteinprojector.architecture import TrainingDataWrapper, Protein_Dataset
 from .model import CoEmbed
 
 MODALITY_SEP = '___'
 
+__all__ = [
+    'MODALITY_SEP',
+    'add_gaussian_noise',
+    'variance_regularizer',
+    'save_results',
+    'fit_predict',
+]
+
 
 def add_gaussian_noise(df, frac=0.05, per_dim=True, seed=None):
+    """
+    Adds Gaussian noise to an embedding dataframe.
+
+    :param df: Dataframe containing embedding values.
+    :type df: pandas.DataFrame
+    :param frac: Fraction of the data standard deviation to use as noise scale.
+    :type frac: float
+    :param per_dim: If ``True``, calculate noise scale per embedding dimension.
+    :type per_dim: bool
+    :param seed: Optional random seed.
+    :type seed: int or None
+    :return: Dataframe with added Gaussian noise.
+    :rtype: pandas.DataFrame
+    """
     rng = np.random.default_rng(seed)
     X = df.to_numpy(dtype=np.float32)
 
@@ -34,8 +62,75 @@ def add_gaussian_noise(df, frac=0.05, per_dim=True, seed=None):
 
 
 def variance_regularizer(z, target: float = 1.0):
+    """
+    Computes variance regularization loss for a latent tensor.
+
+    :param z: Latent tensor.
+    :type z: torch.Tensor
+    :param target: Target standard deviation.
+    :type target: float
+    :return: Mean squared error between observed and target standard deviation.
+    :rtype: torch.Tensor
+    """
     std = z.std(dim=0)
     return F.mse_loss(std, torch.full_like(std, target))
+
+
+def _canonicalize_modality_names(modality_names, cond_str_list, mod_str_list):
+    """
+    Converts user-facing embedding names to ProMERGE canonical modality names.
+
+    :param modality_names: Names passed with the input embeddings.
+    :type modality_names: list[str]
+    :param cond_str_list: Context strings to locate in each name.
+    :type cond_str_list: list[str]
+    :param mod_str_list: Modality strings to locate in each name.
+    :type mod_str_list: list[str]
+    :return: Canonical names in ``modality-context`` format.
+    :rtype: list[str]
+    :raises CellmapsCoEmbeddingError: If names cannot be mapped unambiguously.
+    """
+    canonical_names = []
+    seen_names = set()
+
+    for name in modality_names:
+        matching_conditions = [cond for cond in cond_str_list if cond in name]
+        matching_modalities = [mod for mod in mod_str_list if mod in name]
+
+        if len(matching_conditions) != 1 or len(matching_modalities) != 1:
+            raise CellmapsCoEmbeddingError(
+                'ProMERGE embedding name "{}" must contain exactly one context from {} '
+                'and exactly one modality from {}'.format(name, cond_str_list, mod_str_list)
+            )
+
+        canonical_name = '{}-{}'.format(matching_modalities[0], matching_conditions[0])
+        if canonical_name in seen_names:
+            raise CellmapsCoEmbeddingError(
+                'ProMERGE received duplicate context/modality embedding "{}"'.format(canonical_name)
+            )
+        canonical_names.append(canonical_name)
+        seen_names.add(canonical_name)
+
+    return canonical_names
+
+
+def _get_modalities_per_condition(modality_names, cond_str_list):
+    """
+    Groups canonical modality names by context.
+
+    :param modality_names: Canonical names in ``modality-context`` format.
+    :type modality_names: list[str]
+    :param cond_str_list: Context strings to locate in each name.
+    :type cond_str_list: list[str]
+    :return: Dictionary mapping each context to available modalities.
+    :rtype: dict
+    """
+    result = defaultdict(set)
+    for name in modality_names:
+        modality, condition = name.rsplit('-', 1)
+        if condition in cond_str_list:
+            result[condition].add(modality)
+    return dict(result)
 
 
 def save_results(model, protein_dataset, data_wrapper, anchor_emb, results_suffix=''):
@@ -45,7 +140,7 @@ def save_results(model, protein_dataset, data_wrapper, anchor_emb, results_suffi
     :param model: The neural network model.
     :type model: torch.nn.Module
     :param protein_dataset: The dataset containing protein data.
-    :type protein_dataset: cellmaps_coembedding.autoembed_sc.architecture.Protein_Dataset
+    :type protein_dataset: cellmaps_coembedding.proteinprojector.architecture.Protein_Dataset
     :param data_wrapper: Data handling and configurations as an object.
     :type data_wrapper: TrainingDataWrapper
     :param results_suffix: Suffix to append to results directory for saving.
@@ -87,8 +182,7 @@ def save_results(model, protein_dataset, data_wrapper, anchor_emb, results_suffi
                     embeddings_by_protein[protein_name][modality] = protein_embedding
             for modality, output in outputs.items():
                 input_modality = modality.split(MODALITY_SEP)[0]
-                output_modality = modality.split(MODALITY_SEP)[1]
-                # just need input modality to be there... #& (mask[output_modality] > 0):
+                # Only the input modality must be present to save this reconstruction.
                 if (mask[input_modality] > 0):
                     all_outputs[modality][protein_name] = output.detach().cpu().numpy()[0]
             
@@ -140,7 +234,7 @@ def save_results(model, protein_dataset, data_wrapper, anchor_emb, results_suffi
 def fit_predict(
     resultsdir,
     modality_data,
-    modality_names=[],
+    modality_names=(),
     latent_dim=128,
     n_epochs=300,
     save_update_epochs=True,
@@ -152,55 +246,114 @@ def fit_predict(
     learn_rate=1e-4,
     hidden_size_1=512,
     hidden_size_2=256,
-    negative_from_batch=False,    
-    
-    cond_str_list=[],
-    mod_str_list=[],
-    mod_str_list_mine=[],
+    negative_from_batch=False,
+
+    cond_str_list=None,
+    mod_str_list=None,
+    mod_str_list_mine=None,
     lambda_reconstruction=1.0,
     lambda_disentangle=1.0,
     lambda_triplet_disentangle=1.0,
     lambda_l2_disentangle=0,
     lambda_l2_latent=0,
-    lambda_var = 0.1,
+    lambda_var=0.1,
     disentangle_method="MINE",
-    
+
     save_epoch=50,
-    base_proteingps_parameters={}
+    base_proteingps_parameters=None
 ):
-        
-    #### check exact two contexts
-    assert len(cond_str_list) == 2, "Current implement support one base and one query context. For more than one query, simply run the code with the base and each of the query. For just single context, see MUSE or ProteinProjector." 
-    
-    #### check modalities, handle if there is missing
-    def get_modalities_per_condition(modality_names, cond_str_list, mod_str_list):
-        result = defaultdict(set)
+    """
+    Trains and predicts query-context co-embeddings with ProMERGE.
 
-        for name in modality_names:
-            cond_found = None
-            mod_found = None
+    :param resultsdir: Directory to save ProMERGE intermediate files.
+    :type resultsdir: str
+    :param modality_data: Input embeddings, one list per modality/context.
+    :type modality_data: list
+    :param modality_names: Names corresponding to ``modality_data``.
+    :type modality_names: list[str]
+    :param latent_dim: Dimensionality of the learned latent embeddings.
+    :type latent_dim: int
+    :param n_epochs: Number of training epochs.
+    :type n_epochs: int
+    :param save_update_epochs: Whether to save intermediate epoch outputs.
+    :type save_update_epochs: bool
+    :param batch_size: Batch size for training.
+    :type batch_size: int
+    :param triplet_margin: Margin for triplet disentanglement loss.
+    :type triplet_margin: float
+    :param dropout: Dropout rate for neural network layers.
+    :type dropout: float
+    :param l2_norm: Whether to L2 normalize latent embeddings.
+    :type l2_norm: bool
+    :param mean_losses: Whether to average losses instead of summing them.
+    :type mean_losses: bool
+    :param learn_rate: Learning rate for optimizers.
+    :type learn_rate: float
+    :param hidden_size_1: Size of the first hidden layer.
+    :type hidden_size_1: int
+    :param hidden_size_2: Size of the second hidden layer.
+    :type hidden_size_2: int
+    :param negative_from_batch: Whether to sample negatives from the same batch.
+    :type negative_from_batch: bool
+    :param cond_str_list: Base and query context strings to find in embedding names.
+    :type cond_str_list: list[str] or None
+    :param mod_str_list: Modality strings to find in embedding names.
+    :type mod_str_list: list[str] or None
+    :param mod_str_list_mine: Modalities used for MINE disentanglement.
+    :type mod_str_list_mine: list[str] or None
+    :param lambda_reconstruction: Weight for reconstruction loss.
+    :type lambda_reconstruction: float
+    :param lambda_disentangle: Weight for disentanglement loss.
+    :type lambda_disentangle: float
+    :param lambda_triplet_disentangle: Weight for triplet disentanglement loss.
+    :type lambda_triplet_disentangle: float
+    :param lambda_l2_disentangle: Weight for L2 regularization on disentangled values.
+    :type lambda_l2_disentangle: float
+    :param lambda_l2_latent: Weight for L2 regularization on latent values.
+    :type lambda_l2_latent: float
+    :param lambda_var: Weight for variance regularization.
+    :type lambda_var: float
+    :param disentangle_method: Disentanglement method. One of ``MINE`` or ``subtract``.
+    :type disentangle_method: str
+    :param save_epoch: Epoch interval for intermediate saves.
+    :type save_epoch: int
+    :param base_proteingps_parameters: Overrides for the base-context ProteinProjector run.
+    :type base_proteingps_parameters: dict or None
+    :return: Generator of co-embedding rows.
+    :rtype: generator
+    :raises CellmapsCoEmbeddingError: If context or modality names are invalid.
+    """
+    modality_data = list(modality_data)
+    modality_names = list(modality_names)
+    cond_str_list = list(cond_str_list) if cond_str_list is not None else ['base', 'query']
+    mod_str_list = list(mod_str_list) if mod_str_list is not None else ['mod1', 'mod2']
+    if mod_str_list_mine is not None:
+        mod_str_list_mine = list(mod_str_list_mine)
+    base_proteingps_parameters = dict(base_proteingps_parameters or {})
 
-            for cond in cond_str_list:
-                if cond in name:
-                    cond_found = cond
-                    break
+    if len(cond_str_list) != 2:
+        raise CellmapsCoEmbeddingError(
+            'ProMERGE currently supports exactly two contexts: one base context and one query context'
+        )
+    if len(mod_str_list) < 2:
+        raise CellmapsCoEmbeddingError('ProMERGE requires at least two modality strings')
+    if len(modality_names) != len(modality_data):
+        raise CellmapsCoEmbeddingError('ProMERGE requires one embedding name for each embedding input')
+    if disentangle_method not in {'MINE', 'subtract'}:
+        raise CellmapsCoEmbeddingError('disentangle_method should be MINE or subtract')
 
-            for mod in mod_str_list:
-                if mod in name:
-                    mod_found = mod
-                    break
-
-            if cond_found and mod_found:
-                result[cond_found].add(mod_found)
-
-        return dict(result)
-    
-    modalities_per_cond = get_modalities_per_condition(modality_names, cond_str_list, mod_str_list)
+    modality_names = _canonicalize_modality_names(modality_names, cond_str_list, mod_str_list)
+    modalities_per_cond = _get_modalities_per_condition(modality_names, cond_str_list)
     print("Modalities for each context:")
     print(f"\t{modalities_per_cond}")
-    
-    assert len(modalities_per_cond[cond_str_list[0]]) >= len(modalities_per_cond[cond_str_list[1]]), "base context should has equal or more modalities than query"
-    
+
+    for cond in cond_str_list:
+        if cond not in modalities_per_cond:
+            raise CellmapsCoEmbeddingError('No ProMERGE embeddings found for context "{}"'.format(cond))
+
+    if len(modalities_per_cond[cond_str_list[0]]) < len(modalities_per_cond[cond_str_list[1]]):
+        raise CellmapsCoEmbeddingError('ProMERGE base context should have equal or more modalities than query context')
+
     if len(modalities_per_cond[cond_str_list[1]]) >= 2:
         if (mod_str_list_mine is None) or (mod_str_list_mine == []):
             print("No mod_str_list_mine specified. Using all modalities in query for MINE.")
@@ -209,7 +362,7 @@ def fit_predict(
             if all(ii in modalities_per_cond[cond_str_list[1]] for ii in mod_str_list_mine):
                 print("Using modalities in mod_str_list_mine for MINE.")
             else:
-                raise ValueError("mod_str_list_mine and modalities in query context not match")
+                raise CellmapsCoEmbeddingError("mod_str_list_mine and modalities in query context do not match")
     elif len(modalities_per_cond[cond_str_list[1]]) == 1:
         print("Query context has only one available modality")
         if (mod_str_list_mine is None) or (mod_str_list_mine == []):
@@ -224,7 +377,6 @@ def fit_predict(
                 m_query_list = list(modalities_per_cond[cond_str_list[1]])
                 if (m_query_list[0] in modality_names[m]) and (cond_str_list[1] in modality_names[m]):
                     break
-            query_valid_modality_name = modality_names[m]
             query_valid_modality_data = modality_data[m]
             
             mod_to_fill = sorted(set(mod_str_list_mine) - modalities_per_cond[cond_str_list[1]])
@@ -236,9 +388,13 @@ def fit_predict(
                 modality_names.append(mod_impute_name)
                 modality_data.append(mod_impute_data.reset_index().values.tolist())
         else:
-            raise ValueError("mod_str_list_mine should contain the modality in query context")
-    
-    assert len(mod_str_list_mine) >= 2, "MINE require least two modalities"
+            raise CellmapsCoEmbeddingError("mod_str_list_mine should contain the modality in query context")
+
+    if disentangle_method == "MINE" and len(mod_str_list_mine) < 2:
+        raise CellmapsCoEmbeddingError("MINE requires at least two modalities")
+    if disentangle_method == "subtract" and len(mod_str_list_mine) < 1:
+        raise CellmapsCoEmbeddingError("subtract disentanglement requires at least one modality")
+    anchor_mod_str_list = sorted(set(mod_str_list_mine).union(modalities_per_cond[cond_str_list[1]]))
 
     #### other set up
     
@@ -262,7 +418,7 @@ def fit_predict(
     # check if base context anchor emb by all MINE needed modality already exist
     exist_list = []
     print("Checking base context file")
-    for mod in mod_str_list_mine:
+    for mod in anchor_mod_str_list:
         file_check = f"{resultsdir}/{cond}/{cond}_{mod}-{cond}_latent.tsv"
         print(f"\t{file_check}")
         print(f"\tExists: {os.path.exists(file_check)}")
@@ -273,15 +429,29 @@ def fit_predict(
         print("Some base context embeddings were NOT found. Starting ProteinGPS on base context, using base_proteingps_parameters")
         anchor_resultsdir = os.path.join(resultsdir, cond)
         os.makedirs(anchor_resultsdir, exist_ok=True)
+        base_proteingps_parameters.setdefault('latent_dim', latent_dim)
+        base_proteingps_parameters.setdefault('n_epochs', n_epochs)
+        base_proteingps_parameters.setdefault('save_update_epochs', save_update_epochs)
+        base_proteingps_parameters.setdefault('batch_size', batch_size)
+        base_proteingps_parameters.setdefault('triplet_margin', triplet_margin)
+        base_proteingps_parameters.setdefault('dropout', dropout)
+        base_proteingps_parameters.setdefault('l2_norm', l2_norm)
+        base_proteingps_parameters.setdefault('mean_losses', mean_losses)
+        base_proteingps_parameters.setdefault('learn_rate', learn_rate)
+        base_proteingps_parameters.setdefault('hidden_size_1', hidden_size_1)
+        base_proteingps_parameters.setdefault('hidden_size_2', hidden_size_2)
+        base_proteingps_parameters.setdefault('negative_from_batch', negative_from_batch)
+        base_proteingps_parameters.setdefault('lambda_reconstruction', lambda_reconstruction)
+        base_proteingps_parameters.setdefault('lambda_triplet', lambda_triplet_disentangle)
+        base_proteingps_parameters.setdefault('lambda_l2', lambda_l2_latent)
         anchor_generator = proteingps.fit_predict(
             resultsdir = os.path.join(anchor_resultsdir, cond),
             modality_data=[modality_data[ii] for ii in cond2cond_idx[cond]],
             modality_names=[modality_names[ii] for ii in cond2cond_idx[cond]],
             **base_proteingps_parameters
         )
-        result = []
-        for ii in anchor_generator:
-            result.append(ii)
+        for _ in anchor_generator:
+            pass
     
     #### Second condition ####
     cond = cond_str_list[1]
@@ -294,7 +464,7 @@ def fit_predict(
     # the anchor is always the first condition (cond_str_list[0])
     print("Loading base context")
     anchor_emb = {}
-    for mod in mod_str_list_mine:
+    for mod in anchor_mod_str_list:
         filename = (
             f"{resultsdir}/{cond_str_list[0]}/"
             f"{cond_str_list[0]}_{mod}-{cond_str_list[0]}_latent.tsv"
@@ -331,7 +501,7 @@ def fit_predict(
         other_params = [p for p in model.parameters() if p not in all_MINE_params]
         main_optimizer = torch.optim.Adam(other_params, lr=learn_rate)
 
-        ema_marginal_exp = {f'{mod}-{cond}': 1.0 for mod in mod_str_list} 
+        ema_marginal_exp = {f'{mod}-{cond}': 1.0 for mod in mod_str_list_mine}
         ema_rate = 0.01
     else:
         main_optimizer = torch.optim.Adam(model.parameters(), lr=learn_rate)
@@ -360,7 +530,7 @@ def fit_predict(
         
         #### batch ####
         model.train()
-        for step, (batch_data, batch_mask, batch_proteins) in enumerate(train_loader):
+        for _step, (batch_data, batch_mask, batch_proteins) in enumerate(train_loader):
             # find the protein in the batch that overlap between base and query
             # disentangle will only be computed on these proteins
             batch_proteins_names = [dataset.protein_ids[ii.item()] for ii in batch_proteins]
@@ -368,10 +538,11 @@ def fit_predict(
             batch_protein_in_mod_name = {}
             for mod in mod_str_list:
                 protein_bool = []
+                anchor_key = f'{mod}-{cond}'
                 for ii in np.array(batch_proteins_names):
                     protein_bool.append(
-                        (ii in anchor_emb[f'{mod}-{cond}'].index.values)
-                        if (f'{mod}-{cond}' in modality_names)
+                        (ii in anchor_emb[anchor_key].index.values)
+                        if (anchor_key in anchor_emb)
                         else False
                     )
                 batch_protein_in_mod_bool[mod] = protein_bool
@@ -384,6 +555,8 @@ def fit_predict(
             if disentangle_method == "MINE":
                 # optimize MINE networks
                 for mod in mod_str_list_mine:
+                    if not any(batch_protein_in_mod_bool.get(mod, [])):
+                        continue
                     z = disentangles[f'{mod}-{cond}'][batch_protein_in_mod_bool[mod]].detach()
                     s = anchor_emb[f'{mod}-{cond}'].loc[batch_protein_in_mod_name[mod]]
                     s = torch.tensor(s.values, dtype=torch.float32).to(device)
@@ -564,6 +737,8 @@ def fit_predict(
             batch_disentangle_losses = torch.tensor([]).to(device)    
             if disentangle_method == "MINE":
                 for mod in mod_str_list_mine:
+                    if not any(batch_protein_in_mod_bool.get(mod, [])):
+                        continue
                     z = disentangles[f'{mod}-{cond}'][batch_protein_in_mod_bool[mod]]
                     s = anchor_emb[f'{mod}-{cond}'].loc[batch_protein_in_mod_name[mod]]
                     s = torch.tensor(s.values, dtype=torch.float32).to(device)
@@ -580,15 +755,22 @@ def fit_predict(
                         )
                     )
                     mine_loss = joint_mean - marginal_logsumexp
+                    batch_disentangle_losses = torch.cat(
+                        (batch_disentangle_losses, mine_loss.unsqueeze(0))
+                    )
+                    total_disentangle_loss_by_modality[mod].append(
+                        torch.mean(mine_loss.unsqueeze(0)).detach().cpu().numpy()
+                    )
             else:
                 mine_loss = torch.tensor(0, dtype=torch.float32).to(device)
-
-            batch_disentangle_losses = torch.cat(
-                (batch_disentangle_losses, mine_loss.unsqueeze(0))
-            )  # add the batch dimenion to use the same format as others
-            total_disentangle_loss_by_modality[mod].append(
-                torch.mean(mine_loss.unsqueeze(0)).detach().cpu().numpy()
-            )
+                batch_disentangle_losses = torch.cat(
+                    (batch_disentangle_losses, mine_loss.unsqueeze(0))
+                )
+                total_disentangle_loss_by_modality[disentangle_method].append(
+                    torch.mean(mine_loss.unsqueeze(0)).detach().cpu().numpy()
+                )
+            if len(batch_disentangle_losses) == 0:
+                batch_disentangle_losses = torch.tensor([0.0], device=device)
             
             # check valid matches 
             if (

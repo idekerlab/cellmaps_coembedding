@@ -8,6 +8,7 @@ Subpackages
    :maxdepth: 4
 
    cellmaps_coembedding.muse_sc
+   cellmaps_coembedding.promerge
    cellmaps_coembedding.proteinprojector
    cellmaps_coembedding.protein_gps
 

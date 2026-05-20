@@ -533,51 +533,121 @@ class FakeCoEmbeddingGenerator(EmbeddingGenerator):
 
 
 class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
+    """
+    Generates context-aware co-embeddings using the ProMERGE algorithm.
+
+    ProMERGE expects each embedding name to identify both a biological context
+    and a modality. For example, with the default ``cond_str_list`` of
+    ``["base", "query"]`` and ``mod_str_list`` of ``["mod1", "mod2"]``,
+    names such as ``mod1-base``, ``mod2-base``, and ``mod1-query`` can be used.
+    """
+
+    N_EPOCHS = 300
+    SAVE_UPDATE_EPOCHS = True
+    BATCH_SIZE = 16
+    TRIPLET_MARGIN = 0.5
+    DROPOUT = 0.0
+    L2_NORM = True
+    LEARN_RATE = 1e-4
+    HIDDEN_SIZE_1 = 512
+    HIDDEN_SIZE_2 = 256
+    LAMBDA_RECONSTRUCTION = 1.0
+    LAMBDA_DISENTANGLE = 1.0
+    LAMBDA_TRIPLET_DISENTANGLE = 1.0
+    LAMBDA_L2_DISENTANGLE = 0.0
+    LAMBDA_L2_LATENT = 0.0
+    LAMBDA_VAR = 0.1
+    DISENTANGLE_METHOD = 'MINE'
+
     def __init__(
         self,
-        dimensions==EmbeddingGenerator.LATENT_DIMENSIONS,
+        dimensions=EmbeddingGenerator.LATENT_DIMENSIONS,
         outdir=None,
         embeddings=None,
         ppi_embeddingdir=None,
         image_embeddingdir=None,
         embedding_names=None,
-        
-        n_epochs=300,
-        save_update_epochs=True,
-        batch_size=16,
-        triplet_margin=0.5,
-        dropout=0,
-        l2_norm=True,
+
+        n_epochs=N_EPOCHS,
+        save_update_epochs=SAVE_UPDATE_EPOCHS,
+        batch_size=BATCH_SIZE,
+        triplet_margin=TRIPLET_MARGIN,
+        dropout=DROPOUT,
+        l2_norm=L2_NORM,
         mean_losses=False,
-        learn_rate=1e-4,
-        hidden_size_1=512,
-        hidden_size_2=256,
+        learn_rate=LEARN_RATE,
+        hidden_size_1=HIDDEN_SIZE_1,
+        hidden_size_2=HIDDEN_SIZE_2,
         negative_from_batch=False,
-        
-        cond_str_list=["base", "query"],
-        mod_str_list=['mod1', 'mod2'],
+
+        cond_str_list=None,
+        mod_str_list=None,
         mod_str_list_mine=None,
-        lambda_reconstruction=1.0,
-        lambda_disentangle=1.0,
-        lambda_triplet_disentangle=1.0,
-        lambda_l2_disentangle=0,
-        lambda_l2_latent=0,
-        lambda_var=0.1,
-        disentangle_method="MINE"
+        lambda_reconstruction=LAMBDA_RECONSTRUCTION,
+        lambda_disentangle=LAMBDA_DISENTANGLE,
+        lambda_triplet_disentangle=LAMBDA_TRIPLET_DISENTANGLE,
+        lambda_l2_disentangle=LAMBDA_L2_DISENTANGLE,
+        lambda_l2_latent=LAMBDA_L2_LATENT,
+        lambda_var=LAMBDA_VAR,
+        disentangle_method=DISENTANGLE_METHOD
     ):
         """
-        Generates co-embeddings of a query context based on a base context with ProMERGE method.
-        
-        :param cond_str_list: list of str. Strings in the embedding_names for contexts.
-        :param mod_str_list: list of str. Strings in the embedding_names for modalities.
-        :param mod_str_list_mine: list of str. Subset of mod_str_list to apply MINE disentanglement to. If None, apply to all modalities.
+        Constructor.
+
+        :param dimensions: Output dimensionality of the co-embedding.
+        :type dimensions: int
+        :param outdir: Directory where ProMERGE intermediate files are written.
+        :type outdir: str
+        :param embeddings: List of embedding file or directory paths.
+        :type embeddings: list[str] or None
+        :param ppi_embeddingdir: Directory containing PPI embeddings.
+        :type ppi_embeddingdir: str or None
+        :param image_embeddingdir: Directory containing image embeddings.
+        :type image_embeddingdir: str or None
+        :param embedding_names: Names corresponding to entries in ``embeddings``.
+        :type embedding_names: list[str] or None
+        :param n_epochs: Number of ProMERGE training epochs.
+        :type n_epochs: int
+        :param save_update_epochs: Whether to save intermediate model states.
+        :type save_update_epochs: bool
+        :param batch_size: Batch size for training.
+        :type batch_size: int
+        :param triplet_margin: Margin for triplet loss.
+        :type triplet_margin: float
+        :param dropout: Dropout rate for neural network layers.
+        :type dropout: float
+        :param l2_norm: Whether to L2 normalize latent embeddings.
+        :type l2_norm: bool
+        :param mean_losses: Whether to average losses instead of summing them.
+        :type mean_losses: bool
+        :param learn_rate: Learning rate for optimizers.
+        :type learn_rate: float
+        :param hidden_size_1: Size of the first hidden layer.
+        :type hidden_size_1: int
+        :param hidden_size_2: Size of the second hidden layer.
+        :type hidden_size_2: int
+        :param negative_from_batch: Whether to sample negatives from the same batch.
+        :type negative_from_batch: bool
+        :param cond_str_list: Context strings to find in embedding names.
+        :type cond_str_list: list[str] or None
+        :param mod_str_list: Modality strings to find in embedding names.
+        :type mod_str_list: list[str] or None
+        :param mod_str_list_mine: Modalities used for MINE disentanglement.
+        :type mod_str_list_mine: list[str] or None
         :param lambda_reconstruction: Weight for reconstruction loss.
+        :type lambda_reconstruction: float
         :param lambda_disentangle: Weight for disentanglement loss.
-        :param lambda_triplet_disentangle: Weight for triplet loss.
-        :param lambda_l2_disentangle: Weight for L2 regularization on disentanglement.
-        :param lambda_l2_latent: Weight for L2 regularization on latent space.
-        :param lambda_var: Weight for variance regularization on latent space.
-        :param disentangle_method: Method for disentanglement. Options: "MINE", "subtract".
+        :type lambda_disentangle: float
+        :param lambda_triplet_disentangle: Weight for triplet disentanglement loss.
+        :type lambda_triplet_disentangle: float
+        :param lambda_l2_disentangle: Weight for L2 regularization on disentangled values.
+        :type lambda_l2_disentangle: float
+        :param lambda_l2_latent: Weight for L2 regularization on latent values.
+        :type lambda_l2_latent: float
+        :param lambda_var: Weight for variance regularization.
+        :type lambda_var: float
+        :param disentangle_method: Disentanglement method. One of ``MINE`` or ``subtract``.
+        :type disentangle_method: str
         """
         super().__init__(dimensions=dimensions, embeddings=embeddings,
                          ppi_embeddingdir=ppi_embeddingdir,
@@ -596,10 +666,10 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         self._hidden_size_1 = hidden_size_1
         self._hidden_size_2 = hidden_size_2
         self._negative_from_batch = negative_from_batch
-        
-        self._cond_str_list = cond_str_list
-        self._mod_str_list = mod_str_list
-        self._mod_str_list_mine = mod_str_list_mine
+
+        self._cond_str_list = list(cond_str_list) if cond_str_list is not None else ['base', 'query']
+        self._mod_str_list = list(mod_str_list) if mod_str_list is not None else ['mod1', 'mod2']
+        self._mod_str_list_mine = list(mod_str_list_mine) if mod_str_list_mine is not None else None
         self._lambda_reconstruction = lambda_reconstruction
         self._lambda_disentangle = lambda_disentangle
         self._lambda_triplet_disentangle = lambda_triplet_disentangle
@@ -607,20 +677,22 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         self._lambda_l2_latent = lambda_l2_latent
         self._lambda_var = lambda_var
         self._disentangle_method = disentangle_method
-        
+        self._results_subdir = 'promerge'
+
     def get_next_embedding(self):
         """
-        Iteratively generates embeddings
+        Iteratively generates ProMERGE co-embeddings.
 
         :return: Yields the next embedding.
+        :rtype: list
         """
         embeddings, embedding_names = self._get_embeddings_and_names()
-        
+
         for index in np.arange(len(embeddings)):
             e = embeddings[index]
             e.sort(key=lambda x: x[0])
-            print('There are ' + str(len(e)) + ' ' + embedding_names[index] + ' embeddings')
-        
+            logger.info('There are ' + str(len(e)) + ' ' + embedding_names[index] + ' embeddings')
+
         cond2cond_idx = {}
         for cond in self._cond_str_list:
             cond2cond_idx[cond] = [ii for ii in range(len(embedding_names)) if cond in embedding_names[ii]]
@@ -634,13 +706,35 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
             unique_name_set_all_cond += unique_name_set
             unique_name_set = np.unique(unique_name_set)
 
-            print(f'There are {len(unique_name_set)} total proteins in {cond}')
+            logger.info('There are ' + str(len(unique_name_set)) + ' total proteins in ' + cond)
         unique_name_set_all_cond = np.unique(unique_name_set_all_cond)
-        print(f'There are {len(unique_name_set_all_cond)} total proteins in all contexts')
-               
-        # to add parameters
+        logger.info('There are ' + str(len(unique_name_set_all_cond)) + ' total proteins in all contexts')
+
+        resultsdir = os.path.join(self._outdir, self._results_subdir)
+
+        # ProMERGE first trains the base context with ProteinProjector. Pass
+        # matching dimensions and optimizer settings so custom CLI values remain
+        # consistent across the anchor and query-context models.
+        base_proteingps_parameters = {
+            'latent_dim': self.get_dimensions(),
+            'n_epochs': self._n_epochs,
+            'save_update_epochs': self._save_update_epochs,
+            'batch_size': self._batch_size,
+            'triplet_margin': self._triplet_margin,
+            'dropout': self._dropout,
+            'l2_norm': self._l2_norm,
+            'mean_losses': self._mean_losses,
+            'learn_rate': self._learn_rate,
+            'hidden_size_1': self._hidden_size_1,
+            'hidden_size_2': self._hidden_size_2,
+            'negative_from_batch': self._negative_from_batch,
+            'lambda_reconstruction': self._lambda_reconstruction,
+            'lambda_triplet': self._lambda_triplet_disentangle,
+            'lambda_l2': self._lambda_l2_latent
+        }
+
         for embedding in promerge.fit_predict(
-            resultsdir=self._outdir,
+            resultsdir=resultsdir,
             modality_data=embeddings,
             modality_names=embedding_names,
             latent_dim=self.get_dimensions(),
@@ -655,7 +749,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
             hidden_size_1=self._hidden_size_1,
             hidden_size_2=self._hidden_size_2,
             negative_from_batch=self._negative_from_batch,
-            
+
             cond_str_list=self._cond_str_list,
             mod_str_list=self._mod_str_list,
             mod_str_list_mine=self._mod_str_list_mine,
@@ -665,7 +759,8 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
             lambda_l2_disentangle=self._lambda_l2_disentangle,
             lambda_l2_latent=self._lambda_l2_latent,
             lambda_var=self._lambda_var,
-            disentangle_method=self._disentangle_method
+            disentangle_method=self._disentangle_method,
+            base_proteingps_parameters=base_proteingps_parameters
         ):
             yield embedding
 
