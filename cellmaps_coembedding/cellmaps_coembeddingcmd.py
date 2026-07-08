@@ -45,7 +45,7 @@ def _parse_arguments(desc, args):
                         help='Filepath to .tsv with embeddings. Requires two or more paths.')
     parser.add_argument('--embedding_names', nargs='+',
                         help='Name corresponding to each filepath input in --embeddings. ')
-    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps', 'proteinprojector'], default='muse',
+    parser.add_argument('--algorithm', choices=['auto', 'muse', 'proteingps', 'proteinprojector', 'promerge'], default='muse',
                         help='Algorithm to use for coembedding. Defaults to MUSE. "auto" and "proteingps" are '
                              'deprecated; use "proteinprojector" instead.'
                         )

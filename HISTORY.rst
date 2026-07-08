@@ -2,6 +2,24 @@
 History
 =======
 
+1.6.0 (2026-07-08)
+------------------
+
+* Added the ProMERGE co-embedding algorithm, accessible via ``--algorithm promerge``.
+  ProMERGE co-embeds a query context against a base (anchor) context, disentangling
+  shared from context-specific signal using either a learned mutual-information
+  estimator (``MINE``) or direct subtraction. Adds the ``cellmaps_coembedding.promerge``
+  package and ``ProMERGECoEmbeddingGenerator``, along with ``--lambda_disentangle``,
+  ``--lambda_l2_disentangle``, and ``--lambda_var`` flags.
+
+* Bug fix: corrected a syntax error (``==`` in place of ``=``) in the
+  ``ProMERGECoEmbeddingGenerator`` constructor that prevented ``runner`` from importing.
+
+* Bug fix: added ``promerge`` to the ``--algorithm`` choices so the algorithm is
+  reachable from the command line.
+
+* Added a test suite for ProMERGE covering generator and CLI wiring, the ``CoEmbed``
+  model forward pass, ``save_results``, and end-to-end training smoke tests.
 1.5.0 (2025-10-23)
 --------------------
 
