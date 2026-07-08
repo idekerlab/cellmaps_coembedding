@@ -20,6 +20,7 @@ History
 
 * Added a test suite for ProMERGE covering generator and CLI wiring, the ``CoEmbed``
   model forward pass, ``save_results``, and end-to-end training smoke tests.
+
 1.5.0 (2025-10-23)
 --------------------
 
