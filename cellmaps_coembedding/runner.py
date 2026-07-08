@@ -535,13 +535,13 @@ class FakeCoEmbeddingGenerator(EmbeddingGenerator):
 class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
     def __init__(
         self,
-        dimensions==EmbeddingGenerator.LATENT_DIMENSIONS,
+        dimensions=EmbeddingGenerator.LATENT_DIMENSIONS,
         outdir=None,
         embeddings=None,
         ppi_embeddingdir=None,
         image_embeddingdir=None,
         embedding_names=None,
-        
+
         n_epochs=300,
         save_update_epochs=True,
         batch_size=16,
@@ -553,7 +553,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         hidden_size_1=512,
         hidden_size_2=256,
         negative_from_batch=False,
-        
+
         cond_str_list=["base", "query"],
         mod_str_list=['mod1', 'mod2'],
         mod_str_list_mine=None,
@@ -567,7 +567,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
     ):
         """
         Generates co-embeddings of a query context based on a base context with ProMERGE method.
-        
+
         :param cond_str_list: list of str. Strings in the embedding_names for contexts.
         :param mod_str_list: list of str. Strings in the embedding_names for modalities.
         :param mod_str_list_mine: list of str. Subset of mod_str_list to apply MINE disentanglement to. If None, apply to all modalities.
@@ -596,7 +596,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         self._hidden_size_1 = hidden_size_1
         self._hidden_size_2 = hidden_size_2
         self._negative_from_batch = negative_from_batch
-        
+
         self._cond_str_list = cond_str_list
         self._mod_str_list = mod_str_list
         self._mod_str_list_mine = mod_str_list_mine
@@ -607,7 +607,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         self._lambda_l2_latent = lambda_l2_latent
         self._lambda_var = lambda_var
         self._disentangle_method = disentangle_method
-        
+
     def get_next_embedding(self):
         """
         Iteratively generates embeddings
@@ -615,12 +615,12 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
         :return: Yields the next embedding.
         """
         embeddings, embedding_names = self._get_embeddings_and_names()
-        
+
         for index in np.arange(len(embeddings)):
             e = embeddings[index]
             e.sort(key=lambda x: x[0])
             print('There are ' + str(len(e)) + ' ' + embedding_names[index] + ' embeddings')
-        
+
         cond2cond_idx = {}
         for cond in self._cond_str_list:
             cond2cond_idx[cond] = [ii for ii in range(len(embedding_names)) if cond in embedding_names[ii]]
@@ -637,7 +637,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
             print(f'There are {len(unique_name_set)} total proteins in {cond}')
         unique_name_set_all_cond = np.unique(unique_name_set_all_cond)
         print(f'There are {len(unique_name_set_all_cond)} total proteins in all contexts')
-               
+
         # to add parameters
         for embedding in promerge.fit_predict(
             resultsdir=self._outdir,
@@ -655,7 +655,7 @@ class ProMERGECoEmbeddingGenerator(EmbeddingGenerator):
             hidden_size_1=self._hidden_size_1,
             hidden_size_2=self._hidden_size_2,
             negative_from_batch=self._negative_from_batch,
-            
+
             cond_str_list=self._cond_str_list,
             mod_str_list=self._mod_str_list,
             mod_str_list_mine=self._mod_str_list_mine,
